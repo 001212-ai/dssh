@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>民主治理：市長模擬器</title>
+    <style>
+        :root {
+            --bg-color: #2c3e50;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+            --primary: #3498db;
+            --danger: #e74c3c;
+            --success: #2ecc71;
+            --warning: #f1c40f;
+            --crisis-bg: #ffebee;
+            --crisis-border: #c0392b;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, 'LiHei Pro', '微軟正黑體', sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at center, #34495e 0%, #2c3e50 100%);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #game-container {
+            background-color: #f8f9fa;
+            width: 100%;
+            max-width: 420px;
+            height: 100vh;
+            max-height: 850px;
+            position: relative;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        #stats-bar {
+            background-color: #1a252f;
+            color: white;
+            padding: 15px 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px 20px;
+            z-index: 10;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            font-size: 13px;
+            font-weight: bold;
+            position: relative; /* 為了讓浮動數字定位 */
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .stat-icon { font-size: 16px; }
+
+        .progress-bar {
+            height: 10px;
+            background-color: #444;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+        }
+
+        /* 浮動數字動畫 */
+        .floating-number {
+            position: absolute;
+            right: 0;
+            top: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            opacity: 0;
+            pointer-events: none;
+            animation: floatUp 1s ease-out forwards;
+            z-index: 20;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.8); opacity: 1; }
+            50% { transform: translateY(-20px) scale(1.2); opacity: 1; }
+            100% { transform: translateY(-40px) scale(1); opacity: 0; }
+        }
+
+        #turn-counter {
+            text-align: center;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #7f8c8d;
+            background-color: white;
+            border-bottom: 2px solid #eee;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            z-index: 5;
+        }
+
+        #play-area {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            padding: 20px;
+            perspective: 1000px; /* 3D 視角 */
+        }
+
+        /* 卡牌本體樣式 */
+        #card-deck {
+            position: relative;
+            width: 100%;
+            max-width: 320px;
+            height: 400px;
+        }
+
+        .game-card {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15), 0 3px 6px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            padding: 25px;
+            transition: transform 0.4s ease, opacity 0.4s ease;
+            transform-origin: bottom center;
+            border: 2px solid #eee;
+            z-index: 2;
+        }
+
+        /* 突發危機卡牌特效 */
+        .game-card.crisis {
+            background-color: var(--crisis-bg);
+            border: 3px solid var(--crisis-border);
+            box-shadow: 0 0 20px rgba(231, 76, 60, 0.4);
+            animation: slightShake 0.5s infinite alternate;
+        }
+
+        @keyframes slightShake {
+            from { transform: rotate(-1deg); }
+            to { transform: rotate(1deg); }
+        }
+
+        .card-icon {
+            font-size: 60px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .card-character {
+            font-size: 14px;
+            color: #7f8c8d;
+            text-align: center;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .card-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 15px;
+            color: var(--primary);
+        }
+
+        .crisis .card-title { color: var(--danger); }
+
+        .card-description {
+            font-size: 1.05rem;
+            line-height: 1.6;
+            flex: 1;
+            overflow-y: auto;
+            color: #444;
+            text-align: justify;
+        }
+
+        /* 卡牌背景陰影（營造牌堆感） */
+        .card-shadow {
+            position: absolute;
+            top: 10px;
+            left: 5%;
+            width: 90%;
+            height: 100%;
+            background-color: #e0e0e0;
+            border-radius: 20px;
+            z-index: 1;
+        }
+
+        #controls {
+            display: flex;
+            padding: 20px;
+            gap: 15px;
+            background-color: white;
+            box-shadow: 0 -5px 15px rgba(0,0,0,0.05);
+            z-index: 5;
+        }
+
+        button.action-btn {
+            flex: 1;
+            padding: 18px 10px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s, filter 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        button.action-btn:active {
+            transform: scale(0.95);
+        }
+
+        .btn-icon { font-size: 24px; }
+
+        #btn-reject {
+            background-color: #fff0f0;
+            color: var(--danger);
+            border: 2px solid #ffcdd2;
+        }
+        #btn-reject:hover { background-color: #ffebee; }
+
+        #btn-approve {
+            background-color: #f0fff4;
+            color: var(--success);
+            border: 2px solid #c8e6c9;
+        }
+        #btn-approve:hover { background-color: #e8f5e9; }
+
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(26, 37, 47, 0.95);
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 30px;
+            z-index: 100;
+            color: white;
+        }
+
+        #go-icon { font-size: 80px; margin-bottom: 20px; }
+        #go-title { font-size: 2.5rem; color: var(--danger); margin-bottom: 15px; font-weight: 900;}
+        #go-reason { font-size: 1.2rem; margin-bottom: 40px; line-height: 1.6; color: #ecf0f1; }
+
+        #btn-restart {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+            transition: transform 0.2s;
+        }
+        #btn-restart:hover { transform: translateY(-3px); }
+
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- 頂部數值區 -->
+        <div id="stats-bar">
+            <div class="stat-item">
+                <div class="stat-header"><span><span class="stat-icon">👥</span> 民意支持</span></div>
+                <div class="progress-bar"><div id="stat-approval" class="progress-fill" style="width: 50%; background-color: var(--success);"></div></div>
+                <div id="float-approval"></div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-header"><span><span class="stat-icon">💰</span> 政府財政</span></div>
+                <div class="progress-bar"><div id="stat-budget" class="progress-fill" style="width: 50%; background-color: var(--warning);"></div></div>
+                <div id="float-budget"></div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-header"><span><span class="stat-icon">📈</span> 經濟發展</span></div>
+                <div class="progress-bar"><div id="stat-economy" class="progress-fill" style="width: 50%; background-color: var(--primary);"></div></div>
+                <div id="float-economy"></div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-header"><span><span class="stat-icon">⚖️</span> 社會公平</span></div>
+                <div class="progress-bar"><div id="stat-society" class="progress-fill" style="width: 50%; background-color: #9b59b6;"></div></div>
+                <div id="float-society"></div>
+            </div>
+        </div>
+
+        <div id="turn-counter">第 <span id="current-turn">1</span> / 24 個月 (任期)</div>
+
+        <!-- 遊戲互動區 (卡牌) -->
+        <div id="play-area">
+            <div id="card-deck">
+                <div class="card-shadow"></div>
+                <div id="active-card" class="game-card">
+                    <div id="card-icon" class="card-icon">🏛️</div>
+                    <div id="card-character" class="card-character">市長幕僚長</div>
+                    <div id="card-title" class="card-title">就職典禮</div>
+                    <div id="card-description" class="card-description">市長，歡迎來到市政廳。未來兩年，你的每一個決策都將影響這座城市的命運與四大指標。請準備好迎接挑戰。</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 按鈕區 -->
+        <div id="controls">
+            <button id="btn-reject" class="action-btn" onclick="makeDecision(false)">
+                <span class="btn-icon">👎</span>
+                <span>否決 / 駁回</span>
+            </button>
+            <button id="btn-approve" class="action-btn" onclick="makeDecision(true)">
+                <span class="btn-icon">👍</span>
+                <span>同意 / 簽署</span>
+            </button>
+        </div>
+
+        <!-- 遊戲結束畫面 -->
+        <div id="game-over-screen">
+            <div id="go-icon">💀</div>
+            <h2 id="go-title">遊戲結束</h2>
+            <p id="go-reason">結束原因</p>
+            <button id="btn-restart" onclick="initGame()">重新參選</button>
+        </div>
+    </div>
+
+    <script>
+        // 遊戲核心狀態
+        let state = {
+            approval: 50,
+            budget: 50,
+            economy: 50,
+            society: 50,
+            turn: 1,
+            maxTurns: 24 // 延長為 24 回合 (兩年)
+        };
+
+        let currentEvent = null;
+        let isAnimating = false; // 防止連續點擊
+
+        // --- 牌庫系統：日常法案 (Normal Events) ---
+        const normalEvents = [
+            {
+                icon: "🏭", character: "環保局長", title: "碳排放限制法案", type: "normal",
+                description: "環保團體要求我們嚴格限制市內工廠的碳排放。這將大幅改善空氣品質與居住正義，但工商會揚言撤資。",
+                yesEffect: { approval: 5, budget: -5, economy: -15, society: 15 },
+                noEffect: { approval: -10, budget: 5, economy: 10, society: -10 }
+            },
+            {
+                icon: "🏘️", character: "社會局長", title: "市中心社會住宅", type: "normal",
+                description: "青年抗議房價過高。我們可以在市中心的精華地段撥款興建社會住宅，但這會消耗大量市府預算，並引起當地地主抗議。",
+                yesEffect: { approval: 10, budget: -20, economy: -5, society: 20 },
+                noEffect: { approval: -15, budget: 10, economy: 10, society: -15 }
+            },
+            {
+                icon: "💼", character: "工商大老", title: "外資特別經濟區", type: "normal",
+                description: "市長，跨國企業願意來投資數百億，創造就業。條件是要求您劃設特區，放寬該區的勞基法工時與環評標準。",
+                yesEffect: { approval: -15, budget: 20, economy: 25, society: -20 },
+                noEffect: { approval: 10, budget: -10, economy: -15, society: 10 }
+            },
+            {
+                icon: "📰", character: "市議員", title: "防制假新聞委員會", type: "normal",
+                description: "近期網路假訊息干擾施政。我提案成立「言論審查委員會」以提升社會安定。這能提高施政效率，但可能侵害言論自由。",
+                yesEffect: { approval: -20, budget: -5, economy: 0, society: -15 },
+                noEffect: { approval: 10, budget: 0, economy: 0, society: 10 }
+            },
+            {
+                icon: "🏗️", character: "都發局長", title: "強制拆除釘子戶", type: "normal",
+                description: "舊城區需要都市更新來帶動經濟與稅收，但有幾戶「釘子戶」堅決不搬。警局已經準備好強制驅離，請您下令。",
+                yesEffect: { approval: -15, budget: 10, economy: 15, society: -15 },
+                noEffect: { approval: 10, budget: -5, economy: -15, society: 10 }
+            },
+            {
+                icon: "🚌", character: "交通局長", title: "大眾運輸免費政策", type: "normal",
+                description: "為了減碳並減輕通勤族負擔，提議推行「市民搭乘公車捷運全面免費」。這會讓市民很開心，但財政壓力極大。",
+                yesEffect: { approval: 20, budget: -25, economy: 5, society: 15 },
+                noEffect: { approval: -10, budget: 10, economy: 0, society: -5 }
+            },
+            {
+                icon: "🎓", character: "教育局長", title: "雙語教育預算擴編", type: "normal",
+                description: "為了提升下一代競爭力，提議大幅削減基礎建設預算，全部轉移至中小學聘請外籍教師。資源分配將引發城鄉爭議。",
+                yesEffect: { approval: 5, budget: -10, economy: 10, society: 5 },
+                noEffect: { approval: -5, budget: 10, economy: -5, society: 0 }
+            }
+        ];
+
+        // --- 牌庫系統：突發危機 (Crisis Events) - 懲罰較重 ---
+        const crisisEvents = [
+            {
+                icon: "🌀", character: "災防中心指揮官", title: "百年強颱侵襲", type: "crisis",
+                description: "【突發危機】超強颱風登陸！多處淹水、停電。是否動用所有緊急預備金進行最高等級的救災與災後重建？",
+                yesEffect: { approval: 10, budget: -30, economy: -15, society: 5 },
+                noEffect: { approval: -30, budget: 0, economy: -25, society: -20 } // 不救災會很慘
+            },
+            {
+                icon: "🦠", character: "衛生局長", title: "未知傳染病爆發", type: "crisis",
+                description: "【突發危機】市內出現高傳染力疾病。是否立刻宣布「封城」，強制關閉所有商業活動與學校以控制疫情？",
+                yesEffect: { approval: -10, budget: -15, economy: -30, society: 15 }, // 經濟大傷
+                noEffect: { approval: -25, budget: -5, economy: 10, society: -30 } // 社會公平與民意大傷
+            },
+            {
+                icon: "📉", character: "財政局長", title: "國際金融海嘯", type: "crisis",
+                description: "【突發危機】全球股市崩盤，本市最大企業宣告破產。是否由市府舉債介入紓困，拯救失業潮？",
+                yesEffect: { approval: 5, budget: -35, economy: 15, society: 5 },
+                noEffect: { approval: -20, budget: 5, economy: -30, society: -15 }
+            }
+        ];
+
+        function initGame() {
+            state = { approval: 50, budget: 50, economy: 50, society: 50, turn: 1, maxTurns: 24 };
+            document.getElementById('game-over-screen').style.display = 'none';
+            updateUI();
+            
+            // 初始卡牌固定為「就職典禮」
+            currentEvent = {
+                icon: "🏛️", character: "市政顧問", title: "就職宣誓", type: "normal",
+                description: "市長，您的任期正式開始。左右滑動（或點擊按鈕）來做出決策。平衡各方勢力，活過 24 個月吧！\n(同意：增加民意，減少預算)\n(反對：維持現狀)",
+                yesEffect: { approval: 5, budget: -5, economy: 0, society: 0 },
+                noEffect: { approval: 0, budget: 0, economy: 0, society: 0 }
+            };
+            renderCard(currentEvent);
+        }
+
+        function updateUI() {
+            document.getElementById('current-turn').innerText = state.turn;
+            
+            const stats = ['approval', 'budget', 'economy', 'society'];
+            stats.forEach(stat => {
+                let val = Math.max(0, Math.min(100, state[stat])); // 確保數值在 0-100 之間
+                let bar = document.getElementById(`stat-${stat}`);
+                bar.style.width = `${val}%`;
+                
+                // 動態改變顏色 (低於 20% 變紅色警告)
+                if (val <= 20) {
+                    bar.style.backgroundColor = 'var(--danger)';
+                    bar.style.boxShadow = '0 0 10px red';
+                } else {
+                    bar.style.boxShadow = 'none';
+                    if (stat === 'approval') bar.style.backgroundColor = 'var(--success)';
+                    else if (stat === 'budget') bar.style.backgroundColor = 'var(--warning)';
+                    else if (stat === 'economy') bar.style.backgroundColor = 'var(--primary)';
+                    else bar.style.backgroundColor = '#9b59b6';
+                }
+            });
+        }
+
+        function nextEvent() {
+            // 20% 機率觸發危機，且前兩回合不觸發危機
+            const isCrisis = (Math.random() < 0.2) && (state.turn > 2);
+            
+            let pool = isCrisis ? crisisEvents : normalEvents;
+            const randomIndex = Math.floor(Math.random() * pool.length);
+            currentEvent = pool[randomIndex];
+            
+            renderCard(currentEvent);
+        }
+
+        function renderCard(eventInfo) {
+            const card = document.getElementById('active-card');
+            
+            // 移除舊動畫類別並重置位置
+            card.style.transition = 'none';
+            card.style.transform = 'translateX(0) translateY(0) rotate(0deg)';
+            card.style.opacity = '1';
+            
+            // 強制瀏覽器重繪 (Reflow) 以便重新套用 transition
+            void card.offsetWidth;
+            card.style.transition = 'transform 0.4s ease, opacity 0.4s ease';
+
+            // 更新內容
+            document.getElementById('card-icon').innerText = eventInfo.icon;
+            document.getElementById('card-character').innerText = eventInfo.character;
+            document.getElementById('card-title').innerText = eventInfo.title;
+            document.getElementById('card-description').innerText = eventInfo.description;
+
+            // 切換危機樣式
+            if (eventInfo.type === 'crisis') {
+                card.classList.add('crisis');
+            } else {
+                card.classList.remove('crisis');
+            }
+        }
+
+        function makeDecision(isYes) {
+            if (isAnimating) return; // 防止動畫中重複點擊
+            isAnimating = true;
+
+            const effect = isYes ? currentEvent.yesEffect : currentEvent.noEffect;
+            const card = document.getElementById('active-card');
+
+            // 1. 卡牌飛出動畫
+            if (isYes) {
+                card.style.transform = 'translateX(120%) translateY(-20px) rotate(15deg)'; // 向右飛
+            } else {
+                card.style.transform = 'translateX(-120%) translateY(-20px) rotate(-15deg)'; // 向左飛
+            }
+            card.style.opacity = '0';
+
+            // 2. 顯示浮動數字特效
+            showFloatingNumbers(effect);
+
+            // 3. 延遲執行數值計算與換卡 (等待動畫完成)
+            setTimeout(() => {
+                // 套用數值變化
+                state.approval += effect.approval;
+                state.budget += effect.budget;
+                state.economy += effect.economy;
+                state.society += effect.society;
+                
+                state.turn++;
+                updateUI();
+                
+                checkGameState(); // 檢查是否結束
+                
+            }, 400); // 400ms 等待 CSS 動畫
+        }
+
+        // 浮動數字特效函數
+        function showFloatingNumbers(effect) {
+            const statsMap = {
+                'approval': 'float-approval',
+                'budget': 'float-budget',
+                'economy': 'float-economy',
+                'society': 'float-society'
+            };
+
+            for (const [key, value] of Object.entries(effect)) {
+                if (value !== 0) {
+                    const container = document.getElementById(statsMap[key]);
+                    const floatEl = document.createElement('div');
+                    floatEl.className = 'floating-number';
+                    
+                    if (value > 0) {
+                        floatEl.innerText = `+${value}`;
+                        floatEl.style.color = '#2ecc71'; // 綠色
+                    } else {
+                        floatEl.innerText = `${value}`;
+                        floatEl.style.color = '#e74c3c'; // 紅色
+                    }
+                    
+                    container.appendChild(floatEl);
+                    
+                    // 動畫結束後移除元素
+                    setTimeout(() => {
+                        if(container.contains(floatEl)) container.removeChild(floatEl);
+                    }, 1000);
+                }
+            }
+        }
+
+        function checkGameState() {
+            let gameOver = false;
+            let reason = "";
+            let title = "";
+            let icon = "💀";
+            let color = "var(--danger)";
+
+            // 檢查失敗條件 (任一歸零)
+            if (state.approval <= 0) { 
+                gameOver = true; title = "遭到罷免！"; icon = "🍅";
+                reason = "民怨沸騰，市民發起大規模罷免投票，你被迫黯然下台。你的政治生涯結束了。"; 
+            }
+            else if (state.budget <= 0) { 
+                gameOver = true; title = "市府破產！"; icon = "💸";
+                reason = "政府負債累累，發不出公務員薪水，市政全面停擺，中央政府宣布接管本市。"; 
+            }
+            else if (state.economy <= 0) { 
+                gameOver = true; title = "經濟崩盤！"; icon = "📉";
+                reason = "百業蕭條，企業大舉撤資，失業率創歷史新高，你在無盡的抗議聲中引咎辭職。"; 
+            }
+            else if (state.society <= 0) { 
+                gameOver = true; title = "社會動盪！"; icon = "🔥";
+                reason = "貧富差距與不公義引發嚴重撕裂，街頭爆發大規模暴動，城市陷入混亂。"; 
+            }
+            // 檢查極權/滿分條件 (隱藏 Game Over)
+            else if (state.approval >= 100) { 
+                gameOver = true; title = "民主危機？"; icon = "👑"; color = "#9b59b6";
+                reason = "你的支持度達到 100%。在一個健康的民主社會中，沒有人能討好所有人。歷史學家懷疑你操弄了媒體與選舉，你成了實質的獨裁者。"; 
+            }
+            // 檢查勝利條件 (任期結束)
+            else if (state.turn > state.maxTurns) {
+                gameOver = true; title = "連任成功！"; icon = "🎉"; color = "var(--success)";
+                reason = `恭喜你撐過了完整的兩年任期！\n\n最終民意: ${state.approval}%\n財政: ${state.budget} | 經濟: ${state.economy} | 社會: ${state.society}\n\n你成功維持了各方利益的動態平衡，展現了卓越的民主治理能力。`;
+            }
+
+            if (gameOver) {
+                document.getElementById('go-title').innerText = title;
+                document.getElementById('go-title').style.color = color;
+                document.getElementById('go-reason').innerText = reason;
+                document.getElementById('go-icon').innerText = icon;
+                document.getElementById('game-over-screen').style.display = 'flex';
+                isAnimating = false;
+            } else {
+                nextEvent(); // 沒死就抽下一張卡
+                isAnimating = false; // 解除鎖定
+            }
+        }
+
+        // 啟動遊戲
+        initGame();
+    </script>
+</body>
+</html>
